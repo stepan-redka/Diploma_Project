@@ -1,0 +1,405 @@
+﻿@{
+    ViewData["Title"] = "RAG System";
+}
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="display-5 mb-4">
+                <i class="bi bi-robot"></i> RAG Knowledge Base
+            </h1>
+            <p class="lead text-muted">
+                Retrieval-Augmented Generation system powered by Semantic Kernel, Qdrant, Ollama, and Google Gemini.
+            </p>
+        </div>
+    </div>
+
+    <!-- Status Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-2">
+                    <div class="d-flex align-items-center gap-4">
+                        <div>
+                            <small class="text-muted">Status:</small>
+                            <span id="status-indicator" class="badge bg-secondary ms-1">Checking...</span>
+                        </div>
+                        <div>
+                            <small class="text-muted">Chunks in DB:</small>
+                            <strong id="doc-count" class="ms-1">-</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Document Ingestion Panel -->
+        <div class="col-md-5 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-upload"></i> Ingest Document</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Tab Navigation -->
+                    <ul class="nav nav-tabs mb-3" id="ingestTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="file-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#file-upload" type="button" role="tab">
+                                <i class="bi bi-file-earmark-arrow-up"></i> Upload File
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="text-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#text-paste" type="button" role="tab">
+                                <i class="bi bi-clipboard"></i> Paste Text
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="ingestTabContent">
+                        <!-- File Upload Tab -->
+                        <div class="tab-pane fade show active" id="file-upload" role="tabpanel">
+                            <form id="upload-form" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label for="file-input" class="form-label">Select Document</label>
+                                    <input type="file" class="form-control" id="file-input" name="file"
+                                           accept=".txt,.pdf,.docx,.md,.html,.htm,.csv,.json,.xml">
+                                    <div class="form-text">
+                                        Supported: PDF, DOCX, TXT, MD, HTML, CSV, JSON, XML (max 50MB)
+                                    </div>
+                                </div>
+                                <div id="file-preview" class="mb-3 d-none">
+                                    <div class="alert alert-info py-2">
+                                        <i class="bi bi-file-earmark"></i>
+                                        <span id="file-name"></span>
+                                        <span class="badge bg-secondary ms-2" id="file-size"></span>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="upload-btn">
+                                    <i class="bi bi-cloud-upload"></i> Upload & Ingest
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Text Paste Tab -->
+                        <div class="tab-pane fade" id="text-paste" role="tabpanel">
+                            <form id="ingest-form">
+                                <div class="mb-3">
+                                    <label for="doc-name" class="form-label">Document Name</label>
+                                    <input type="text" class="form-control" id="doc-name" 
+                                           placeholder="my-document.txt">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="doc-content" class="form-label">Content</label>
+                                    <textarea class="form-control" id="doc-content" rows="8" 
+                                              placeholder="Paste your document text here..."></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100" id="ingest-btn">
+                                    <i class="bi bi-cloud-upload"></i> Ingest Text
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div id="ingest-result" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Panel -->
+        <div class="col-md-7 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-search"></i> Ask a Question</h5>
+                </div>
+                <div class="card-body">
+                    <form id="query-form">
+                        <div class="mb-3">
+                            <label for="question" class="form-label">Your Question</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="question" 
+                                       placeholder="What would you like to know?">
+                                <button type="submit" class="btn btn-success" id="query-btn">
+                                    <i class="bi bi-send"></i> Ask
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="top-k" class="form-label">Number of sources: <strong id="top-k-value">3</strong></label>
+                            <input type="range" class="form-range" id="top-k" min="1" max="10" value="3" 
+                                   oninput="document.getElementById('top-k-value').textContent = this.value">
+                            <!-- Scale tick marks -->
+                            <div class="d-flex justify-content-between px-1" style="font-size: 10px; color: #888; margin-top: -5px;">
+                                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Answer Section -->
+                    <div id="answer-section" class="d-none">
+                        <hr>
+                        <h6><i class="bi bi-chat-dots"></i> Answer</h6>
+                        <div id="answer-content" class="p-3 bg-light rounded mb-3"></div>
+                        
+                        <div id="sources-section">
+                            <h6><i class="bi bi-journal-text"></i> Sources</h6>
+                            <div id="sources-list"></div>
+                        </div>
+                        
+                        <div class="text-muted small mt-2">
+                            <i class="bi bi-clock"></i> Processing time: <span id="processing-time">-</span>ms
+                        </div>
+                    </div>
+
+                    <!-- Loading Spinner -->
+                    <div id="query-loading" class="d-none text-center py-4">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Searching and generating answer...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Check system status on load
+        document.addEventListener('DOMContentLoaded', checkStatus);
+
+        async function checkStatus() {
+            try {
+                const response = await fetch('/Home/Status');
+                const data = await response.json();
+                
+                const indicator = document.getElementById('status-indicator');
+                const docCount = document.getElementById('doc-count');
+                
+                if (data.status === 'ready') {
+                    indicator.className = 'badge bg-success';
+                    indicator.textContent = 'Connected';
+                } else {
+                    indicator.className = 'badge bg-danger';
+                    indicator.textContent = 'Error';
+                }
+                
+                docCount.textContent = data.documentCount;
+            } catch (error) {
+                const indicator = document.getElementById('status-indicator');
+                indicator.className = 'badge bg-danger';
+                indicator.textContent = 'Disconnected';
+            }
+        }
+
+        // Handle file selection preview
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const preview = document.getElementById('file-preview');
+            const fileName = document.getElementById('file-name');
+            const fileSize = document.getElementById('file-size');
+            
+            if (file) {
+                preview.classList.remove('d-none');
+                fileName.textContent = file.name;
+                fileSize.textContent = formatFileSize(file.size);
+            } else {
+                preview.classList.add('d-none');
+            }
+        });
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Handle file upload
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('upload-btn');
+            const resultDiv = document.getElementById('ingest-result');
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                resultDiv.innerHTML = '<div class="alert alert-warning">Please select a file.</div>';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Uploading & Processing...';
+            resultDiv.innerHTML = '';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/Home/UploadFile', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle"></i> ${data.message}<br>
+                            <small class="text-muted">
+                                Type: ${data.documentType} | 
+                                Size: ${formatFileSize(data.fileSize)} | 
+                                Characters: ${data.characterCount.toLocaleString()}
+                            </small>
+                        </div>`;
+                    fileInput.value = '';
+                    document.getElementById('file-preview').classList.add('d-none');
+                    checkStatus();
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> ${data.error || data.message}
+                        </div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
+                    </div>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-cloud-upload"></i> Upload & Ingest';
+            }
+        });
+
+        // Handle document ingestion (text paste)
+        document.getElementById('ingest-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const btn = document.getElementById('ingest-btn');
+            const resultDiv = document.getElementById('ingest-result');
+            const content = document.getElementById('doc-content').value;
+            const docName = document.getElementById('doc-name').value;
+            
+            if (!content.trim()) {
+                resultDiv.innerHTML = '<div class="alert alert-warning">Please enter document content.</div>';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ingesting...';
+            resultDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/Home/Ingest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        content: content, 
+                        documentName: docName || 'Untitled' 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle"></i> ${data.message}
+                        </div>`;
+                    document.getElementById('doc-content').value = '';
+                    document.getElementById('doc-name').value = '';
+                    checkStatus();
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> ${data.message}
+                        </div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
+                    </div>`;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-cloud-upload"></i> Ingest Text';
+            }
+        });
+
+        // Handle query submission
+        document.getElementById('query-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const question = document.getElementById('question').value;
+            const topK = parseInt(document.getElementById('top-k').value);
+            
+            if (!question.trim()) return;
+            
+            const answerSection = document.getElementById('answer-section');
+            const loadingDiv = document.getElementById('query-loading');
+            const queryBtn = document.getElementById('query-btn');
+            
+            answerSection.classList.add('d-none');
+            loadingDiv.classList.remove('d-none');
+            queryBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/Home/Query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question, topK: topK })
+                });
+                
+                const data = await response.json();
+                
+                // Display answer
+                document.getElementById('answer-content').innerHTML = 
+                    marked.parse(data.answer || 'No answer generated.');
+                
+                // Display sources
+                const sourcesList = document.getElementById('sources-list');
+                if (data.sources && data.sources.length > 0) {
+                    sourcesList.innerHTML = data.sources.map((s, i) => `
+                        <div class="card mb-2">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between">
+                                    <small class="text-muted">${s.sourceDocument}</small>
+                                    <span class="badge bg-info">Score: ${(s.score * 100).toFixed(1)}%</span>
+                                </div>
+                                <p class="mb-0 small">${s.content.substring(0, 200)}${s.content.length > 200 ? '...' : ''}</p>
+                            </div>
+                        </div>
+                    `).join('');
+                    document.getElementById('sources-section').classList.remove('d-none');
+                } else {
+                    sourcesList.innerHTML = '<p class="text-muted">No sources found.</p>';
+                }
+                
+                document.getElementById('processing-time').textContent = data.processingTimeMs;
+                checkStatus();
+                
+                loadingDiv.classList.add('d-none');
+                answerSection.classList.remove('d-none');
+                
+            } catch (error) {
+                loadingDiv.classList.add('d-none');
+                answerSection.classList.remove('d-none');
+                document.getElementById('answer-content').innerHTML = 
+                    `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            } finally {
+                queryBtn.disabled = false;
+            }
+        });
+    </script>
+    
+    <!-- Marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+}
