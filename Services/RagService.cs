@@ -50,19 +50,22 @@ public class RagService : IRagService
     private readonly Kernel _kernel;
     private readonly QdrantClient _qdrantClient;
     private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
+    private readonly IOllamaChatService _ollamaChatService;
 
     public RagService(
         IOptions<RagConfiguration> config,
         ILogger<RagService> logger,
         Kernel kernel,
         QdrantClient qdrantClient,
-        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator)
+        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+        IOllamaChatService ollamaChatService)
     {
         _config = config.Value;
         _logger = logger;
         _kernel = kernel;
         _qdrantClient = qdrantClient;
         _embeddingGenerator = embeddingGenerator;
+        _ollamaChatService = ollamaChatService;
     }
 
     /// <summary>
@@ -348,7 +351,7 @@ public class RagService : IRagService
             }
             else
             {
-                answer = await GenerateAnswerWithGeminiAsync(question, retrievedContexts);
+                answer = await GenerateAnswerWithOllamaAsync(question, retrievedContexts);
             }
 
             stopwatch.Stop();
@@ -435,6 +438,43 @@ public class RagService : IRagService
         }
         
         return "Unable to generate response after retries.";
+    }
+
+    /// <summary>
+    /// Generates an answer using Ollama based on retrieved context
+    /// </summary>
+    private async Task<string> GenerateAnswerWithOllamaAsync(string question, List<RetrievedContext> contexts)
+    {
+        // Build context string from retrieved chunks
+        var contextBuilder = new StringBuilder();
+        for (int i = 0; i < contexts.Count; i++)
+        {
+            contextBuilder.AppendLine($"[Source {i + 1}]: {contexts[i].Content}");
+            contextBuilder.AppendLine();
+        }
+
+        var systemPrompt = @"You are a helpful assistant that answers questions based on provided context.
+Use ONLY the information from the context to answer questions.
+If the context doesn't contain enough information, say so clearly.
+Be concise but thorough in your response.";
+
+        var userMessage = $@"CONTEXT:
+{contextBuilder}
+
+QUESTION: {question}
+
+ANSWER:";
+
+        try
+        {
+            var answer = await _ollamaChatService.GenerateResponseAsync(systemPrompt, userMessage);
+            return answer;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to generate answer with Ollama");
+            return "An error occurred while generating the answer. Please try again.";
+        }
     }
 
     /// <summary>
