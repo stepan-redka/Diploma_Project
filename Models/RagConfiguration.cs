@@ -29,6 +29,7 @@ public class OllamaSettings
 {
     public string Endpoint { get; set; } = "http://localhost:11434";
     public string EmbeddingModel { get; set; } = "nomic-embed-text";
+    public string ChatModel { get; set; } = "llama3.2:3b";
 }
 
 /// <summary>
