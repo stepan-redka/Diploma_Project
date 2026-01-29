@@ -193,19 +193,21 @@ public class RagService : IRagService
         {
             _logger.LogInformation("Deleting {Count} chunks", idList.Count);
 
-            var pointIds = idList.Select(id =>
-            {
-                if (Guid.TryParse(id, out var guid))
-                    return new PointId { Uuid = guid.ToString() };
-                if (ulong.TryParse(id, out var num))
-                    return new PointId { Num = num };
-                return new PointId { Uuid = id };
-            }).ToList();
+            // Convert string IDs to ulong for Qdrant
+            var numericIds = idList
+                .Select(id => ulong.TryParse(id, out var num) ? num : (ulong?)null)
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToList();
 
-            await _qdrantClient.DeleteAsync(
-                collectionName: _config.Qdrant.CollectionName,
-                ids: pointIds
-            );
+            if (numericIds.Count > 0)
+            {
+                await _qdrantClient.DeleteAsync(
+                    collectionName: _config.Qdrant.CollectionName,
+                    ids: numericIds,
+                    wait: true
+                );
+            }
 
             _logger.LogInformation("Successfully deleted {Count} chunks", idList.Count);
             return idList.Count;
