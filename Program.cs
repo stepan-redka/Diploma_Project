@@ -1,5 +1,6 @@
 using Microsoft.Extensions.AI;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Connectors.Google;
 using Qdrant.Client;
 using RagWebDemo.Models;
 using RagWebDemo.Services;
@@ -45,13 +46,17 @@ builder.Services.AddSingleton(kernel);
 builder.Services.AddSingleton<QdrantClient>(sp => 
     new QdrantClient(ragConfig.Qdrant.Host, ragConfig.Qdrant.Port));
 
-// Register Ollama embedding generator using Microsoft.Extensions.AI
+// Register HttpClient for Ollama
+builder.Services.AddHttpClient("Ollama", client =>
+{
+    client.BaseAddress = new Uri(ragConfig.Ollama.Endpoint);
+});
+
+// Register Ollama embedding generator
 builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp =>
 {
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("Ollama");
-    return new OllamaEmbeddingGenerator(
-        new Uri(ragConfig.Ollama.Endpoint), 
-        ragConfig.Ollama.EmbeddingModel);
+    return new OllamaEmbeddingService(httpClient, ragConfig.Ollama.EmbeddingModel);
 });
 
 // Register Document Parser Service
