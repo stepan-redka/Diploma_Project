@@ -1,6 +1,4 @@
 using Microsoft.Extensions.AI;
-using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.Connectors.Google;
 using Qdrant.Client;
 using RagWebDemo.Core.Interfaces;
 using RagWebDemo.Core.Models;
@@ -43,19 +41,6 @@ builder.Services.AddHttpClient("Ollama", client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
-// Build Semantic Kernel with Google Gemini for chat completion
-var kernelBuilder = Kernel.CreateBuilder();
-
-#pragma warning disable SKEXP0070
-kernelBuilder.AddGoogleAIGeminiChatCompletion(
-    modelId: ragConfig.Gemini.ModelId,
-    apiKey: ragConfig.Gemini.ApiKey
-);
-#pragma warning restore SKEXP0070
-
-var kernel = kernelBuilder.Build();
-builder.Services.AddSingleton(kernel);
-
 // Register Qdrant client
 builder.Services.AddSingleton<QdrantClient>(sp => 
     new QdrantClient(ragConfig.Qdrant.Host, ragConfig.Qdrant.Port));
@@ -73,18 +58,24 @@ builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp 
     return new OllamaEmbeddingService(httpClient, ragConfig.Ollama.EmbeddingModel);
 });
 
-// Register Ollama chat service
-builder.Services.AddScoped<IOllamaChatService>(sp =>
+// Register Ollama chat service (implements IChatService)
+builder.Services.AddScoped<IChatService>(sp =>
 {
     var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("Ollama");
     var logger = sp.GetRequiredService<ILogger<OllamaChatService>>();
     return new OllamaChatService(httpClient, ragConfig.Ollama.ChatModel, logger);
 });
 
+// Register Text Chunking Service (SRP - single responsibility)
+builder.Services.AddScoped<ITextChunkingService, TextChunkingService>();
+
+// Register Answer Generation Service (SRP - single responsibility)
+builder.Services.AddScoped<IAnswerGenerationService, AnswerGenerationService>();
+
 // Register Document Parser Service
 builder.Services.AddScoped<IDocumentParserService, DocumentParserService>();
 
-// Register RagService
+// Register RagService (DIP - depends on abstractions)
 builder.Services.AddScoped<IRagService, RagService>();
 
 var app = builder.Build();

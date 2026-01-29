@@ -1,10 +1,10 @@
 using RagWebDemo.Core.Models;
-using RagWebDemo.Infrastructure.Services;
 
 namespace RagWebDemo.Core.Interfaces;
 
 /// <summary>
 /// Interface for RAG operations - enables testing and future extensibility
+/// Follows Interface Segregation Principle - focused on RAG-specific operations
 /// </summary>
 public interface IRagService
 {

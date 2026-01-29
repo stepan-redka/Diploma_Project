@@ -1,15 +1,21 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using RagWebDemo.Core.Interfaces;
 
 namespace RagWebDemo.Infrastructure.AI;
 
-public interface IOllamaChatService
-{
-    Task<string> GenerateResponseAsync(string systemPrompt, string userMessage, CancellationToken cancellationToken = default);
-}
+// Keep the old interface for backward compatibility but mark as obsolete
+[Obsolete("Use IChatService from Core.Interfaces instead")]
+public interface IOllamaChatService : IChatService { }
 
-public class OllamaChatService : IOllamaChatService
+/// <summary>
+/// Ollama-based chat service implementation
+/// Follows Dependency Inversion Principle - implements abstraction from Core layer
+/// </summary>
+#pragma warning disable CS0618 // Suppress obsolete warning for backward compatibility
+public class OllamaChatService : IChatService, IOllamaChatService
+#pragma warning restore CS0618
 {
     private readonly HttpClient _httpClient;
     private readonly string _modelName;

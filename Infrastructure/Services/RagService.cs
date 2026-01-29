@@ -1,13 +1,10 @@
 using System.Diagnostics;
-using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using Microsoft.SemanticKernel;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 using RagWebDemo.Core.Interfaces;
 using RagWebDemo.Core.Models;
-using RagWebDemo.Infrastructure.AI;
 
 // Alias to avoid conflict with Qdrant.Client.Grpc.QueryResponse
 using QueryResponse = RagWebDemo.Core.Models.QueryResponse;
@@ -17,43 +14,33 @@ using QueryResponse = RagWebDemo.Core.Models.QueryResponse;
 namespace RagWebDemo.Infrastructure.Services;
 
 /// <summary>
-/// Info about a stored chunk for display
-/// </summary>
-public class StoredChunkInfo
-{
-    public string Id { get; set; } = "";
-    public string SourceDocument { get; set; } = "";
-    public string ContentPreview { get; set; } = "";
-    public int ChunkIndex { get; set; }
-}
-
-/// <summary>
-/// RAG Service implementing text chunking, embedding generation, vector storage and retrieval
-/// Uses Ollama for embeddings, Qdrant for vector storage, and Gemini for answer synthesis
+/// RAG Service implementing embedding generation, vector storage and retrieval
+/// Follows Single Responsibility Principle - delegates chunking and answer generation to dedicated services
+/// Follows Dependency Inversion Principle - depends on abstractions (interfaces) not concretions
 /// </summary>
 public class RagService : IRagService
 {
     private readonly RagConfiguration _config;
     private readonly ILogger<RagService> _logger;
-    private readonly Kernel _kernel;
     private readonly QdrantClient _qdrantClient;
     private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
-    private readonly IOllamaChatService _ollamaChatService;
+    private readonly ITextChunkingService _textChunkingService;
+    private readonly IAnswerGenerationService _answerGenerationService;
 
     public RagService(
         IOptions<RagConfiguration> config,
         ILogger<RagService> logger,
-        Kernel kernel,
         QdrantClient qdrantClient,
         IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
-        IOllamaChatService ollamaChatService)
+        ITextChunkingService textChunkingService,
+        IAnswerGenerationService answerGenerationService)
     {
         _config = config.Value;
         _logger = logger;
-        _kernel = kernel;
         _qdrantClient = qdrantClient;
         _embeddingGenerator = embeddingGenerator;
-        _ollamaChatService = ollamaChatService;
+        _textChunkingService = textChunkingService;
+        _answerGenerationService = answerGenerationService;
     }
 
     /// <summary>
@@ -222,8 +209,8 @@ public class RagService : IRagService
             // Ensure collection exists
             await EnsureCollectionExistsAsync();
 
-            // Step 1: Chunk the text
-            var chunks = ChunkText(content, _config.Chunking.MaxChunkSize, _config.Chunking.ChunkOverlap);
+            // Step 1: Chunk the text using dedicated service
+            var chunks = _textChunkingService.ChunkText(content, _config.Chunking.MaxChunkSize, _config.Chunking.ChunkOverlap);
             _logger.LogInformation("Created {ChunkCount} chunks from document", chunks.Count);
 
             if (chunks.Count == 0)
@@ -331,16 +318,8 @@ public class RagService : IRagService
 
             _logger.LogInformation("Retrieved {Count} relevant chunks", retrievedContexts.Count);
 
-            // Step 4: Generate answer using Gemini
-            string answer;
-            if (retrievedContexts.Count == 0)
-            {
-                answer = "I couldn't find any relevant information in the knowledge base to answer your question. Please try rephrasing or ensure relevant documents have been uploaded.";
-            }
-            else
-            {
-                answer = await GenerateAnswerWithOllamaAsync(question, retrievedContexts);
-            }
+            // Step 4: Generate answer using dedicated service
+            var answer = await _answerGenerationService.GenerateAnswerAsync(question, retrievedContexts);
 
             stopwatch.Stop();
 
@@ -363,210 +342,5 @@ public class RagService : IRagService
                 ProcessingTimeMs = stopwatch.ElapsedMilliseconds
             };
         }
-    }
-
-    /// <summary>
-    /// Generates an answer using Google Gemini based on retrieved context
-    /// </summary>
-    private async Task<string> GenerateAnswerWithGeminiAsync(string question, List<RetrievedContext> contexts)
-    {
-        // Build context string from retrieved chunks
-        var contextBuilder = new StringBuilder();
-        for (int i = 0; i < contexts.Count; i++)
-        {
-            contextBuilder.AppendLine($"[Source {i + 1}]: {contexts[i].Content}");
-            contextBuilder.AppendLine();
-        }
-
-        // Create RAG prompt
-        var prompt = $"""
-            You are a helpful assistant that answers questions based on the provided context.
-            Use ONLY the information from the context below to answer the question.
-            If the context doesn't contain enough information to answer, say so clearly.
-            Be concise but thorough in your response.
-
-            CONTEXT:
-            {contextBuilder}
-
-            QUESTION: {question}
-
-            ANSWER:
-            """;
-
-        // Retry with exponential backoff for rate limiting
-        const int maxRetries = 5;
-        for (int attempt = 0; attempt < maxRetries; attempt++)
-        {
-            try
-            {
-                // Use Semantic Kernel to invoke Gemini
-                var result = await _kernel.InvokePromptAsync(prompt);
-                return result.GetValue<string>() ?? "Unable to generate response.";
-            }
-            catch (Exception ex) when (ex.Message.Contains("429") || ex.InnerException?.Message.Contains("429") == true)
-            {
-                if (attempt < maxRetries - 1)
-                {
-                    var delayMs = (int)Math.Pow(2, attempt + 2) * 1000; // 4s, 8s, 16s, 32s
-                    _logger.LogWarning("Rate limited by Gemini API. Retrying in {Delay}ms (attempt {Attempt}/{Max})", 
-                        delayMs, attempt + 1, maxRetries);
-                    await Task.Delay(delayMs);
-                }
-                else
-                {
-                    _logger.LogError(ex, "Rate limit exceeded after {MaxRetries} retries", maxRetries);
-                    return "⚠️ The Gemini API is rate-limited. Please wait 30-60 seconds and try again. Free tier allows ~15 requests/minute.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to generate answer with Gemini");
-                throw;
-            }
-        }
-        
-        return "Unable to generate response after retries.";
-    }
-
-    /// <summary>
-    /// Generates an answer using Ollama based on retrieved context
-    /// </summary>
-    private async Task<string> GenerateAnswerWithOllamaAsync(string question, List<RetrievedContext> contexts)
-    {
-        // Build context string from retrieved chunks
-        var contextBuilder = new StringBuilder();
-        for (int i = 0; i < contexts.Count; i++)
-        {
-            contextBuilder.AppendLine($"[Source {i + 1}]: {contexts[i].Content}");
-            contextBuilder.AppendLine();
-        }
-
-        var systemPrompt = @"You are a helpful assistant that answers questions based on provided context.
-Use ONLY the information from the context to answer questions.
-If the context doesn't contain enough information, say so clearly.
-Be concise but thorough in your response.";
-
-        var userMessage = $@"CONTEXT:
-{contextBuilder}
-
-QUESTION: {question}
-
-ANSWER:";
-
-        try
-        {
-            var answer = await _ollamaChatService.GenerateResponseAsync(systemPrompt, userMessage);
-            return answer;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to generate answer with Ollama");
-            return "An error occurred while generating the answer. Please try again.";
-        }
-    }
-
-    /// <summary>
-    /// Chunks text into smaller overlapping segments for better retrieval
-    /// </summary>
-    private List<string> ChunkText(string text, int maxChunkSize, int overlap)
-    {
-        var chunks = new List<string>();
-        
-        if (string.IsNullOrWhiteSpace(text))
-            return chunks;
-
-        // Normalize whitespace
-        text = string.Join(" ", text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries));
-
-        // Split by sentences first for more natural chunks
-        var sentences = SplitIntoSentences(text);
-        var currentChunk = new StringBuilder();
-        var currentLength = 0;
-
-        foreach (var sentence in sentences)
-        {
-            // If adding this sentence would exceed max size, save current chunk
-            if (currentLength + sentence.Length > maxChunkSize && currentLength > 0)
-            {
-                chunks.Add(currentChunk.ToString().Trim());
-                
-                // Start new chunk with overlap from previous content
-                var overlapText = GetOverlapText(currentChunk.ToString(), overlap);
-                currentChunk.Clear();
-                currentChunk.Append(overlapText);
-                currentLength = overlapText.Length;
-            }
-
-            currentChunk.Append(sentence).Append(" ");
-            currentLength += sentence.Length + 1;
-        }
-
-        // Add remaining content
-        if (currentChunk.Length > 0)
-        {
-            chunks.Add(currentChunk.ToString().Trim());
-        }
-
-        // Filter out very small chunks
-        chunks = chunks.Where(c => c.Length >= 50).ToList();
-
-        return chunks;
-    }
-
-    /// <summary>
-    /// Splits text into sentences using common delimiters
-    /// </summary>
-    private List<string> SplitIntoSentences(string text)
-    {
-        var sentences = new List<string>();
-        var current = new StringBuilder();
-
-        for (int i = 0; i < text.Length; i++)
-        {
-            current.Append(text[i]);
-
-            // Check for sentence boundaries
-            if (text[i] == '.' || text[i] == '!' || text[i] == '?')
-            {
-                // Look ahead to verify it's actually end of sentence
-                if (i + 1 >= text.Length || char.IsWhiteSpace(text[i + 1]) || char.IsUpper(text[i + 1]))
-                {
-                    sentences.Add(current.ToString().Trim());
-                    current.Clear();
-                }
-            }
-        }
-
-        // Add any remaining text
-        if (current.Length > 0)
-        {
-            sentences.Add(current.ToString().Trim());
-        }
-
-        return sentences;
-    }
-
-    /// <summary>
-    /// Gets the last 'overlap' characters from text for chunk overlap
-    /// </summary>
-    private string GetOverlapText(string text, int overlap)
-    {
-        if (string.IsNullOrEmpty(text) || overlap <= 0)
-            return string.Empty;
-
-        text = text.Trim();
-        if (text.Length <= overlap)
-            return text;
-
-        // Try to find a word boundary for cleaner overlap
-        var startIndex = text.Length - overlap;
-        var spaceIndex = text.IndexOf(' ', startIndex);
-        
-        if (spaceIndex > startIndex && spaceIndex < text.Length)
-        {
-            return text.Substring(spaceIndex + 1);
-        }
-
-        return text.Substring(startIndex);
     }
 }

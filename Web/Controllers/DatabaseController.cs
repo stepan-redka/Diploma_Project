@@ -5,7 +5,8 @@ using RagWebDemo.Core.Models;
 namespace RagWebDemo.Web.Controllers;
 
 /// <summary>
-/// Controller for database management operations
+/// Controller for database management operations (view + chunk management)
+/// Follows Single Responsibility Principle - handles database/chunk management
 /// </summary>
 public class DatabaseController : Controller
 {
@@ -21,19 +22,6 @@ public class DatabaseController : Controller
     public IActionResult Index()
     {
         return View();
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> Status()
-    {
-        var documentCount = await _ragService.GetDocumentCountAsync();
-        var collectionReady = await _ragService.EnsureCollectionExistsAsync();
-
-        return Ok(new
-        {
-            status = collectionReady ? "ready" : "error",
-            documentCount = documentCount
-        });
     }
 
     [HttpGet]

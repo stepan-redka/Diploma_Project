@@ -204,7 +204,7 @@
 
         async function checkStatus() {
             try {
-                const response = await fetch('/Home/Status');
+                const response = await fetch('/api/Status');
                 const data = await response.json();
                 
                 const indicator = document.getElementById('status-indicator');
@@ -272,7 +272,7 @@
                 const formData = new FormData();
                 formData.append('file', file);
                 
-                const response = await fetch('/Home/UploadFile', {
+                const response = await fetch('/api/Documents/upload', {
                     method: 'POST',
                     body: formData
                 });
@@ -328,7 +328,7 @@
             resultDiv.innerHTML = '';
             
             try {
-                const response = await fetch('/Home/Ingest', {
+                const response = await fetch('/api/Documents/ingest', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -382,7 +382,7 @@
             queryBtn.disabled = true;
             
             try {
-                const response = await fetch('/Home/Query', {
+                const response = await fetch('/api/Query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ question: question, topK: topK })

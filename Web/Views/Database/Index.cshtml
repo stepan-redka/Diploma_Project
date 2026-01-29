@@ -94,7 +94,7 @@
 
         async function checkStatus() {
             try {
-                const response = await fetch('/Database/Status');
+                const response = await fetch('/api/Status');
                 const data = await response.json();
                 const indicator = document.getElementById('status-indicator');
                 indicator.className = data.status === 'ready' ? 'badge bg-success ms-1' : 'badge bg-danger ms-1';
