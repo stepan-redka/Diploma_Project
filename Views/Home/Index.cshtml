@@ -28,6 +28,11 @@
                             <small class="text-muted">Chunks in DB:</small>
                             <strong id="doc-count" class="ms-1">-</strong>
                         </div>
+                        <div class="ms-auto">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="refresh-status-btn" title="Refresh status">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -167,10 +172,35 @@
     </div>
 </div>
 
+<style>
+    .spin-animation {
+        animation: spin 0.5s linear infinite;
+    }
+    @@keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+</style>
+
 @section Scripts {
     <script>
         // Check system status on load
         document.addEventListener('DOMContentLoaded', checkStatus);
+
+        // Refresh button handler
+        document.getElementById('refresh-status-btn').addEventListener('click', async function() {
+            const btn = this;
+            const icon = btn.querySelector('i');
+            icon.classList.add('spin-animation');
+            btn.disabled = true;
+            
+            await checkStatus();
+            
+            setTimeout(() => {
+                icon.classList.remove('spin-animation');
+                btn.disabled = false;
+            }, 500);
+        });
 
         async function checkStatus() {
             try {
