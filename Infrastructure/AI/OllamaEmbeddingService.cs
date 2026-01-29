@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 
-namespace RagWebDemo.Services;
+namespace RagWebDemo.Infrastructure.AI;
 
 public class OllamaEmbeddingService : IEmbeddingGenerator<string, Embedding<float>>
 {

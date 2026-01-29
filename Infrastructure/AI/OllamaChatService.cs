@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace RagWebDemo.Services;
+namespace RagWebDemo.Infrastructure.AI;
 
 public interface IOllamaChatService
 {

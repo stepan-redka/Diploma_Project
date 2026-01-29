@@ -2,44 +2,11 @@ using System.Text;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using UglyToad.PdfPig;
+using RagWebDemo.Core.Interfaces;
+using RagWebDemo.Core.Entities;
+using DocType = RagWebDemo.Core.Enums.DocumentType;
 
-namespace RagWebDemo.Services;
-
-/// <summary>
-/// Supported document types for parsing
-/// </summary>
-public enum DocumentType
-{
-    Unknown,
-    PlainText,
-    Pdf,
-    Docx,
-    Markdown,
-    Html
-}
-
-/// <summary>
-/// Result of document parsing
-/// </summary>
-public class ParsedDocument
-{
-    public bool Success { get; set; }
-    public string Content { get; set; } = string.Empty;
-    public string FileName { get; set; } = string.Empty;
-    public DocumentType Type { get; set; }
-    public string? ErrorMessage { get; set; }
-    public int CharacterCount => Content.Length;
-}
-
-/// <summary>
-/// Interface for document parsing service
-/// </summary>
-public interface IDocumentParserService
-{
-    Task<ParsedDocument> ParseAsync(Stream fileStream, string fileName);
-    DocumentType GetDocumentType(string fileName);
-    bool IsSupported(string fileName);
-}
+namespace RagWebDemo.Infrastructure.Services;
 
 /// <summary>
 /// Service for parsing various document formats into plain text
@@ -70,17 +37,17 @@ public class DocumentParserService : IDocumentParserService
     /// <summary>
     /// Determine document type from file extension
     /// </summary>
-    public DocumentType GetDocumentType(string fileName)
+    public DocType GetDocumentType(string fileName)
     {
         var extension = Path.GetExtension(fileName).ToLowerInvariant();
         return extension switch
         {
-            ".txt" or ".csv" or ".json" or ".xml" => DocumentType.PlainText,
-            ".pdf" => DocumentType.Pdf,
-            ".docx" => DocumentType.Docx,
-            ".md" or ".markdown" => DocumentType.Markdown,
-            ".html" or ".htm" => DocumentType.Html,
-            _ => DocumentType.Unknown
+            ".txt" or ".csv" or ".json" or ".xml" => DocType.PlainText,
+            ".pdf" => DocType.Pdf,
+            ".docx" => DocType.Docx,
+            ".md" or ".markdown" => DocType.Markdown,
+            ".html" or ".htm" => DocType.Html,
+            _ => DocType.Unknown
         };
     }
 
@@ -101,11 +68,11 @@ public class DocumentParserService : IDocumentParserService
 
             result.Content = result.Type switch
             {
-                DocumentType.PlainText => await ParsePlainTextAsync(fileStream),
-                DocumentType.Pdf => await ParsePdfAsync(fileStream),
-                DocumentType.Docx => await ParseDocxAsync(fileStream),
-                DocumentType.Markdown => await ParsePlainTextAsync(fileStream), // Markdown is text
-                DocumentType.Html => await ParseHtmlAsync(fileStream),
+                DocType.PlainText => await ParsePlainTextAsync(fileStream),
+                DocType.Pdf => await ParsePdfAsync(fileStream),
+                DocType.Docx => await ParseDocxAsync(fileStream),
+                DocType.Markdown => await ParsePlainTextAsync(fileStream), // Markdown is text
+                DocType.Html => await ParseHtmlAsync(fileStream),
                 _ => throw new NotSupportedException($"Document type not supported: {Path.GetExtension(fileName)}")
             };
 

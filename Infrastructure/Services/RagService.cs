@@ -5,28 +5,16 @@ using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
-using RagWebDemo.Models;
+using RagWebDemo.Core.Interfaces;
+using RagWebDemo.Core.Models;
+using RagWebDemo.Infrastructure.AI;
 
 // Alias to avoid conflict with Qdrant.Client.Grpc.QueryResponse
-using QueryResponse = RagWebDemo.Models.QueryResponse;
+using QueryResponse = RagWebDemo.Core.Models.QueryResponse;
 
 #pragma warning disable SKEXP0001, SKEXP0010, SKEXP0020, SKEXP0070
 
-namespace RagWebDemo.Services;
-
-/// <summary>
-/// Interface for RAG operations - enables testing and future extensibility
-/// </summary>
-public interface IRagService
-{
-    Task<IngestResponse> IngestDocumentAsync(string content, string documentName);
-    Task<QueryResponse> QueryAsync(string question, int topK = 3);
-    Task<bool> EnsureCollectionExistsAsync();
-    Task<int> GetDocumentCountAsync();
-    Task<bool> ClearCollectionAsync();
-    Task<List<StoredChunkInfo>> GetStoredChunksAsync(int limit = 500);
-    Task<int> DeleteChunksAsync(IEnumerable<string> chunkIds);
-}
+namespace RagWebDemo.Infrastructure.Services;
 
 /// <summary>
 /// Info about a stored chunk for display

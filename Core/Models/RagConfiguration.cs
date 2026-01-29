@@ -1,4 +1,4 @@
-namespace RagWebDemo.Models;
+namespace RagWebDemo.Core.Models;
 
 /// <summary>
 /// Configuration for RAG system components

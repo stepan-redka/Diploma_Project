@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using RagWebDemo.Models;
-using RagWebDemo.Services;
+using RagWebDemo.Core.Interfaces;
+using RagWebDemo.Core.Models;
 
-namespace RagWebDemo.Controllers;
+namespace RagWebDemo.Web.Controllers;
 
 /// <summary>
 /// Controller for database management operations

@@ -2,18 +2,32 @@ using Microsoft.Extensions.AI;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Connectors.Google;
 using Qdrant.Client;
-using RagWebDemo.Models;
-using RagWebDemo.Services;
+using RagWebDemo.Core.Interfaces;
+using RagWebDemo.Core.Models;
+using RagWebDemo.Infrastructure.Services;
+using RagWebDemo.Infrastructure.AI;
 
 #pragma warning disable SKEXP0001, SKEXP0010, SKEXP0020, SKEXP0070
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Load local secrets if available (not committed to git)
-builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+builder.Configuration.AddJsonFile(Path.Combine("Web", "appsettings.Local.json"), optional: true, reloadOnChange: true);
 
-// Add services to the container.
-builder.Services.AddControllersWithViews();
+// Add services to the container with Razor view location configuration
+builder.Services.AddControllersWithViews()
+    .AddRazorOptions(options =>
+    {
+        // Configure Razor to look for views in Web/Views
+        options.ViewLocationFormats.Clear();
+        options.ViewLocationFormats.Add("/Web/Views/{1}/{0}.cshtml");
+        options.ViewLocationFormats.Add("/Web/Views/Shared/{0}.cshtml");
+        
+        options.AreaViewLocationFormats.Clear();
+        options.AreaViewLocationFormats.Add("/Web/Areas/{2}/Views/{1}/{0}.cshtml");
+        options.AreaViewLocationFormats.Add("/Web/Areas/{2}/Views/Shared/{0}.cshtml");
+        options.AreaViewLocationFormats.Add("/Web/Views/Shared/{0}.cshtml");
+    });
 
 // Bind RAG configuration from appsettings.json
 builder.Services.Configure<RagConfiguration>(
@@ -84,7 +98,14 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+
+// Configure static files to use Web/wwwroot
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(builder.Environment.ContentRootPath, "Web", "wwwroot")),
+    RequestPath = ""
+});
 
 app.UseRouting();
 

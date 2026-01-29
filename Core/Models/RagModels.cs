@@ -1,4 +1,4 @@
-namespace RagWebDemo.Models;
+namespace RagWebDemo.Core.Models;
 
 /// <summary>
 /// Represents a text chunk stored in vector database
