@@ -59,6 +59,14 @@ builder.Services.AddSingleton<IEmbeddingGenerator<string, Embedding<float>>>(sp 
     return new OllamaEmbeddingService(httpClient, ragConfig.Ollama.EmbeddingModel);
 });
 
+// Register Ollama chat service
+builder.Services.AddScoped<IOllamaChatService>(sp =>
+{
+    var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("Ollama");
+    var logger = sp.GetRequiredService<ILogger<OllamaChatService>>();
+    return new OllamaChatService(httpClient, ragConfig.Ollama.ChatModel, logger);
+});
+
 // Register Document Parser Service
 builder.Services.AddScoped<IDocumentParserService, DocumentParserService>();
 
