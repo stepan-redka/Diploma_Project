@@ -139,21 +139,67 @@ public class DocumentParserService : IDocumentParserService
     {
         var textBuilder = new StringBuilder();
 
-        // Copy to memory stream since PdfPig needs seekable stream
-        using var memoryStream = new MemoryStream();
-        stream.CopyTo(memoryStream);
-        memoryStream.Position = 0;
-
-        using var document = PdfDocument.Open(memoryStream);
-        
-        foreach (var page in document.GetPages())
+        try
         {
-            var pageText = page.Text;
-            if (!string.IsNullOrWhiteSpace(pageText))
+            // Copy to memory stream since PdfPig needs seekable stream
+            using var memoryStream = new MemoryStream();
+            stream.CopyTo(memoryStream);
+            memoryStream.Position = 0;
+
+            // Check if this is actually a PDF file by looking for PDF header
+            var headerBytes = new byte[5];
+            memoryStream.Read(headerBytes, 0, 5);
+            memoryStream.Position = 0;
+            
+            var headerString = Encoding.ASCII.GetString(headerBytes);
+            if (!headerString.StartsWith("%PDF"))
             {
-                textBuilder.AppendLine(pageText);
-                textBuilder.AppendLine(); // Add spacing between pages
+                // Not a real PDF, treat as plain text
+                _logger.LogWarning("File appears to be text file with .pdf extension, parsing as plain text");
+                using var reader = new StreamReader(memoryStream, Encoding.UTF8);
+                return Task.FromResult(reader.ReadToEnd());
             }
+
+            // Try with lenient parsing options
+            using var document = PdfDocument.Open(memoryStream, new ParsingOptions
+            {
+                // Don't throw on parsing errors
+                UseLenientParsing = true
+            });
+            
+            foreach (var page in document.GetPages())
+            {
+                var pageText = page.Text;
+                if (!string.IsNullOrWhiteSpace(pageText))
+                {
+                    textBuilder.AppendLine(pageText);
+                    textBuilder.AppendLine(); // Add spacing between pages
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error parsing PDF, attempting fallback");
+            
+            // Fallback: try reading as plain text
+            try
+            {
+                stream.Position = 0;
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+                var content = reader.ReadToEnd();
+                
+                if (!string.IsNullOrWhiteSpace(content) && !content.Contains("%PDF"))
+                {
+                    _logger.LogInformation("Successfully parsed as plain text fallback");
+                    return Task.FromResult(content);
+                }
+            }
+            catch
+            {
+                // Ignore fallback errors and throw original
+            }
+            
+            throw new InvalidOperationException($"Unable to parse PDF document: {ex.Message}", ex);
         }
 
         return Task.FromResult(textBuilder.ToString().Trim());
