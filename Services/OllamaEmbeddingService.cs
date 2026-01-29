@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 
 namespace RagWebDemo.Services;
@@ -8,6 +9,10 @@ public class OllamaEmbeddingService : IEmbeddingGenerator<string, Embedding<floa
 {
     private readonly HttpClient _httpClient;
     private readonly string _modelName;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public OllamaEmbeddingService(HttpClient httpClient, string modelName)
     {
@@ -39,7 +44,7 @@ public class OllamaEmbeddingService : IEmbeddingGenerator<string, Embedding<floa
             response.EnsureSuccessStatusCode();
 
             var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-            var result = JsonSerializer.Deserialize<OllamaEmbeddingResponse>(responseJson);
+            var result = JsonSerializer.Deserialize<OllamaEmbeddingResponse>(responseJson, JsonOptions);
 
             if (result?.Embeddings != null && result.Embeddings.Length > 0)
             {
@@ -58,6 +63,7 @@ public class OllamaEmbeddingService : IEmbeddingGenerator<string, Embedding<floa
 
     private class OllamaEmbeddingResponse
     {
+        [JsonPropertyName("embeddings")]
         public float[][]? Embeddings { get; set; }
     }
 }
